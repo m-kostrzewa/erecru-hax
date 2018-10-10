@@ -1,0 +1,6 @@
+venv/
+creds/
+*.swp
+
+# Bartosz's internal file
+erecruiter_api.py

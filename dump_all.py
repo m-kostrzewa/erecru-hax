@@ -1,21 +1,38 @@
-# !/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
-
+import sys
 import hashlib
 import logging
 import pprint
 import requests
+import pickle
+
+from httplib2 import Http
+from oauth2client import file, client, tools
+
+from oauthlib.oauth2 import LegacyApplicationClient
+from requests.auth import HTTPBasicAuth
+from requests_oauthlib import OAuth2Session
+
+password = sys.argv[1]
+
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
 DEFAULT_HASH_TYPE='sha1'
 erecruiter_pl_url = 'https://api.erecruiter.pl/v1.1/'
-erecruiter_pl_url = 'https://testapi.io/api/m-kostrzewa/v1.1/'
+#erecruiter_pl_url = 'https://testapi.io/api/m-kostrzewa/v1.1/'
+
+ACCESS_TOKEN_URL = 'https://authorization-api.erecruiter.pl/oAuth/Token'
+CONFIG = {
+    'client_id': 'aaa',
+    'client_secret': 'bbb',
+    'username': 'ccc',
+    'password': password
+}
+TOKEN_FILE_PATH='creds/token.pickle'
 
 endpoints = [('Account/Permissions',),
              ('Account/AppVersion',),
@@ -74,6 +91,47 @@ hash_keys = [
     'LastName',
     'Email',
 ]
+
+
+def token_saver(token):
+    with open(TOKEN_FILE_PATH, 'wb') as handle:
+        pickle.dump(token, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def token_loader():
+    try:
+        with open(TOKEN_FILE_PATH, 'rb') as handle:
+            return pickle.load(handle)
+    except (IOError, EOFError):
+        auth = HTTPBasicAuth(CONFIG['client_id'], CONFIG['client_secret'])
+        client = LegacyApplicationClient(client_id=CONFIG['client_id'])
+        oauth = OAuth2Session(client=client)
+        token = oauth.fetch_token(token_url=ACCESS_TOKEN_URL,
+                                  auth=auth,
+                                  username=CONFIG['username'],
+                                  password=CONFIG['password'])
+        token_saver(token)
+        return token
+
+
+def get_erecruiter_client():
+    token = token_loader()
+
+    extra = {
+        'client_id': CONFIG['client_id'],
+        'client_secret': CONFIG['client_secret'],
+    }
+
+    client = OAuth2Session(
+        CONFIG['client_id'],
+        token=token,
+        auto_refresh_url=ACCESS_TOKEN_URL,
+        auto_refresh_kwargs=extra,
+        token_updater=token_saver
+    )
+
+    return client
+
 
 def dump_all(client):
     db = {}
@@ -151,7 +209,8 @@ def _hash_db(db):
     _walk(db)
 
 def main():
-    dump_all(requests)
+    client = get_erecruiter_client()
+    dump_all(client)
 
 
 if __name__ == '__main__':
