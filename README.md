@@ -20,7 +20,7 @@ Create a file `config.json` in `creds/` subdirectory:
   "companyId": 123456789,
   "http_debug": true,
   "debug": true,
-  "filters.limit": 100
+  "limit": 100
 }
 ```
 * `"client_id"`: (Required) client id
@@ -30,7 +30,7 @@ Create a file `config.json` in `creds/` subdirectory:
 * `"companyId"`: (Required) company id
 * `"http_debug"`: (Optional) enable http debug (default: False)
 * `"debug"`: (Optional) enable application level debug (default: True)
-* `"filters.limit"`: (Optional) limit filter for API calls (default: 100)
+* `"limit"`: (Optional) limit filter for API calls (default: 100)
 
 If specified credentials are correct but no `companyId` is specified, the client will connect
 and print out all available companies for current user.
