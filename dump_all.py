@@ -12,8 +12,10 @@ from oauthlib.oauth2 import LegacyApplicationClient
 from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth2Session
 
+
 logger = logging.getLogger(__name__)
 coloredlogs.install(level='INFO', logger=logger)
+
 
 ACCESS_TOKEN_URL = 'https://authorization-api.erecruiter.pl/oAuth/Token'
 CONFIG_FILE = 'creds/config.json'
@@ -23,85 +25,70 @@ ERECRUITER_API_URL = 'https://api.erecruiter.pl/v1.1/'
 # ERECRUITER_API_URL='https://testapi.io/api/m-kostrzewa/v1.1/'
 
 
-endp_list = [('Account/Permissions',),
-             ('Account/AppVersion',),
-             ('Account/Companies',),
-             ('Account/Stages/{id}',),
-             ('Account/Tags',),
-             ('Account/Origins',),
-             ('CandidateApplications/{candidateApplicationId}/FullCandidateFormWithWorkLocations',),
-             ('CandidateApplications/{id}/Tags',),
-             ('CandidateApplications/{id}/Notes',),
-             ('CandidateApplications/{id}',),
-             ('CandidateApplications/{candidateApplicationId}/Full',),
-             # (# 'CandidateApplications/FormCustomFiles/{id}', ),
-             ('CandidateApplications/{id}/StagesHistory',),
-             ('Candidates/{id}/JobWantedWithExpectedSalaries',),
-             ('Candidates',),
-             ('Candidates/Favourites',),
-             # (# 'Candidates/{id}/Photo', ),
-             # (# 'Candidates/CVs/{id}', ),
-             ('Candidates/{id}/Recruitments', 'Candidates', 'CandidateId'),
-             # (# 'Candidates/{id}/DriverLicense', ),
-             ('Candidates/{id}/ContactData', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/Educations', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/LanguageSkills', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/EmploymentExperiences', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/EmploymentHistories', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/Notes', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/DesiredSalary', 'Candidates', 'CandidateId'),
-             ('Candidates/{id}/JobWanted', 'Candidates', 'CandidateId'),
-             ('Dictionaries/Languages',),
-             ('Dictionaries/RecruitmentStages',),
-             ('Recruitments/{id}/CandidateApplications',),
-             ('Recruitments',),
-             ('Recruitments/{id}',),
-             ('Recruitments/My',),
-             ('Recruitments/Closed',),
-             ('Recruitments/Closed/My',),
-             ('Recruitments/{id}/Stages',)]
-
-# Endpoint definition list
-# (endpoint path, db collection name, id of the resource)
+# Top level resource dndpoint definition list
+# (endpoint path, db collection name)
 # * endpoint path - this will be the suffix of the API url
-#                   if {} is in the path, it will get replaced
 # * db collection name - name of the top level collection to be put in DB
-#                        and also in which collection to look for the id
-# * id of the resource - this is the key which value will be substituted for {}
-#                        in endpoint path
-endpoints = [
-    ('candidates', 'candidates', None),
-    ('candidates/{id}/Recruitments', 'candidates', u'candidateId'),
-    ('candidates/{id}/Educations', 'candidates', 'candidateId'),
-    ('candidates/{id}/LanguageSkills', 'candidates', 'candidateId'),
-    ('candidates/{id}/EmploymentExperiences', 'candidates', 'candidateId'),
-    ('candidates/{id}/EmploymentHistories', 'candidates', 'candidateId'),
-    ('candidates/{id}/Notes', 'candidates', 'candidateId'),
-    ('candidates/{id}/DesiredSalary', 'candidates', 'candidateId'),
-    ('candidates/{id}/JobWanted', 'candidates', 'candidateId'),
-    ('candidates/{id}/Notes', 'candidates', 'candidateId'),
-    ('candidates/{id}/DesiredSalary', 'candidates', 'candidateId'),
-    ('candidates/{id}/JobWanted', 'candidates', 'candidateId'),
+top_level_collection_endpoints = [
+    ('candidates', 'candidates'),
 
-    ('recruitments', 'recruitments', None),
-    ('recruitments/{id}/candidateapplications', 'recruitments', 'id'),
-    ('recruitments/{id}/stages', 'recruitments', 'id'),
+    ('recruitments', 'recruitments'),
 
-    ('Dictionaries/Languages', 'languages', None),
-    ('Dictionaries/RecruitmentStages', 'stages', None),
+    ('Dictionaries/Languages', 'languages'),
+    ('Dictionaries/RecruitmentStages', 'stages'),
 
-    ('Account/Stages', 'accountstages', None),
-    ('Account/Tags', 'accounttags', None),
-    ('Account/Origins', 'accountorigins', None),
+    ('Account/Stages', 'accountstages'),
+    ('Account/Tags', 'tags'),
+    ('Account/Origins', 'accountorigins'),
 
-    ('Candidates/Favourites', 'candidatefavourites', None),
+    ('Candidates/Favourites', 'candidatefavourites'),
+]
+
+
+# Additional endpoint lists for resource extensions
+# (endpoint_path, collection, collection_item_id, extension_name)
+# * endpoint_path      - a parametrized endpoint path
+# * collection         - which collection will be extended
+# * collection_item_id - which collection item identified by this id
+#                        should be extended
+#                        This value will be used to format the endpoint path
+# * extension_name     - the endpoint request result may return a dict
+#                        with this key. Extract it if it exists, else return
+#                        the result as is. Whole resource will be added
+#                        to the collection under this key
+collection_extension_endpoints = [
+    ('candidates/{id}/Recruitments',
+        'candidates', u'candidateId', 'recruitments'),
+    ('candidates/{id}/Educations',
+        'candidates', 'candidateId', 'educations'),
+    ('candidates/{id}/LanguageSkills',
+        'candidates', 'candidateId', 'languageSkills'),
+    ('candidates/{id}/EmploymentExperiences',
+        'candidates', 'candidateId', 'employmentexperiences'),
+    ('candidates/{id}/EmploymentHistories',
+        'candidates', 'candidateId', 'employmenthistories'),
+    ('candidates/{id}/Notes',
+        'candidates', 'candidateId', 'notes'),
+    ('candidates/{id}/DesiredSalary',
+        'candidates', 'candidateId', 'desiredsalary'),
+    ('candidates/{id}/JobWanted',
+        'candidates', 'candidateId', 'jobwanted'),
+
+
+    ('recruitments/{id}/candidateapplications',
+        'recruitments', 'id', 'applications'),
+    ('recruitments/{id}/stages',
+        'recruitments', 'id', 'stages'),
 ]
 
 
 apps_endpoints = [
-    ('candidateapplications/{id}/stageshistory', 'applications', 'applicationId'),
-    ('candidateapplications/{id}/tags', 'applications', 'applicationId'),
-    ('candidateapplications/{id}/notes', 'applications', 'applicationId'),
+    ('candidateapplications/{id}/stageshistory',
+        'applications', 'applicationId', 'candidateApplicationStages'),
+    ('candidateapplications/{id}/tags',
+        'applications', 'applicationId', 'tags'),
+    ('candidateapplications/{id}/notes',
+        'applications', 'applicationId', 'notes'),
 ]
 
 
@@ -113,112 +100,12 @@ hash_keys = [
 ]
 
 
-def get_resource(client, config, path, offset=0):
-    payload = {'companyId': config.get('companyId', 0),
-               'limit': config.get('limit', 100),
-               'offset': offset}
-    logger.debug(f'About to get resource from {path} with params {payload}.')
-    response = client.get(path, params=payload)
-    if not response.ok:
-        raise Exception(f'Failed to get {path}. '
-                        f'{response.status_code}:{response.reason}. {response.text}')
-    try:
-        resp_json = response.json()
-    except Exception:
-        raise Exception(f'Failed to json() response from {path}. {response.text}.')
-    logger.debug(f'Got resource {resp_json}.')
-    return resp_json
-
-def _process_applications(client, config, db):
-    db['applications'] = []
-    if 'recruitments' not in db:
-        logger.warning(f'No recruitments in DB. Cannot process applications.')
-        return db
-    for rec in db['recruitments']:
-        if 'candidateapplications' not in rec or 'applications' not in rec['candidateapplications']:
-            logger.warning(f'Cannot process recruitment {rec} for applications.')
-            continue
-        for app in rec['candidateapplications']['applications']:
-            app['recruitmentsId'] = rec['id']
-        db['applications'].extend(rec['candidateapplications']['applications'])
-        rec.pop('candidateapplications')
-    dump_all(client, config, apps_endpoints, db)
-    return db
-
-def dump_all(client, config, endpoints, db=None):
-    if not db:
-        db = {}
-
-    for endpoint_spec in endpoints:
-        path = endpoint_spec[0]
-        path_collection = endpoint_spec[1] or path
-        path_collection_key = endpoint_spec[2]
-        if '{' not in path:
-            # Here we process top level collection list
-            if path_collection not in db:
-                db[path_collection] = []
-            try:
-                # keep paginating over the results for normal collections
-                # stupid API returns different data types for different
-                offset = 0
-                while True:
-                    resource = get_resource(client, config, ERECRUITER_API_URL + path, offset)
-                    if isinstance(resource, list):
-                        # Add lists as is
-                        db[path_collection] = resource
-                        break
-                    elif isinstance(resource, dict):
-                        # try to get path_collection from resource first so we can add dicts without this key as is
-                        # in the KeyError exception
-                        db[path_collection].extend(resource[path_collection])
-
-                        # path_collection key usually has a list
-                        # if offset was to high, this list will be empty
-                        # quick solution for pagination
-                        if resource[path_collection]:
-                            offset += config['limit']
-                        else:
-                            break
-                    else:
-                        logger.error(f'Failed to identify resource {resource}.')
-                        break
-            except KeyError as ke:
-                logger.warning(f'Failed to get collection {path_collection} from {resource}. {str(ke)}.')
-                db[path_collection].extend(resource)
-            except Exception as e:
-                logger.error(f'{str(e)}')
-            continue
-        if '{' in path:
-            # here we fetch specific resources for a collection item
-            if path_collection not in db:
-                logger.warning(f'Skipping path {path}. Collection {path_collection} not present in db.')
-                continue
-            for collection_item in db[path_collection]:
-                collection_item_id = str(collection_item[path_collection_key])
-                path_with_id = path.replace('{id}', collection_item_id)
-                url = ERECRUITER_API_URL + path_with_id
-                sub_collection_name = path.split('/')[-1]
-                try:
-                    resource = get_resource(client, config, url)
-                except Exception as e:
-                    logger.warning(f'Skipping subcollection {sub_collection_name}. {str(e)}')
-                    continue
-                found_collection_item_idx = -1
-                for index, item in enumerate(db[path_collection]):
-                    if str(item[path_collection_key]) == str(collection_item_id):
-                        found_collection_item_idx = index
-                        break
-                if found_collection_item_idx != -1:
-                    db[path_collection][found_collection_item_idx][sub_collection_name] = resource
-    logger.info(f'Done. Dumping DB.')
-    return db
-
-
 def _hash_value(value, algorithm=DEFAULT_HASH_TYPE):
     try:
         hashobj = hashlib.new(algorithm)
     except ValueError:
-        logger.warning(f'Invalid hash type "{algorithm}". Falling back to "{DEFAULT_HASH_TYPE}".')
+        logger.warning(f'Invalid hash type "{algorithm}".'
+                       ' Falling back to "{DEFAULT_HASH_TYPE}".')
         hashobj = hashlib.new(DEFAULT_HASH_TYPE)
 
     if isinstance(value, str):
@@ -232,11 +119,11 @@ def _hash_value(value, algorithm=DEFAULT_HASH_TYPE):
     return hashobj.hexdigest()
 
 
-def _hash_db(db, hash_keys):
+def _hash_db(db, keys):
     def _walk(thing):
         if isinstance(thing, dict):
             for key in thing:
-                if key in hash_keys:
+                if key in keys:
                     logger.debug(f'Hashing key "{key}"')
                     thing[key] = _hash_value(str(thing[key]).lower())
                     continue
@@ -257,7 +144,8 @@ def _get_config():
         logger.error(f'Failed to load config {CONFIG_FILE}. {str(e)}')
         exit(1)
     if 'limit' not in config:
-        logger.warning(f'Limit not specified in config file {CONFIG_FILE}. Using default 100.')
+        logger.warning(f'Limit not specified in config file {CONFIG_FILE}. '
+                       'Using default 100.')
         config['limit'] = 100
     logger.debug(f'Using configuration:\n{config}')
     return config
@@ -298,7 +186,17 @@ def _get_token(config):
     return token
 
 
-def _create_client(config):
+def _http_debug_on():
+    http.client.HTTPConnection.debuglevel = 1
+    req_log = logging.getLogger('requests')
+    req_log.propagate = True
+    coloredlogs.install(level='DEBUG', logger=req_log)
+
+    oa_log = logging.getLogger('requests_oauthlib')
+    coloredlogs.install(level='DEBUG', logger=oa_log)
+
+
+def create_client(config):
     token = _get_token(config)
 
     extra = {
@@ -317,14 +215,134 @@ def _create_client(config):
     return client
 
 
-def _http_debug_on():
-    http.client.HTTPConnection.debuglevel = 1
-    req_log = logging.getLogger('requests')
-    req_log.propagate = True
-    coloredlogs.install(level='DEBUG', logger=req_log)
+def get_resource_range(client, url, offset, limit, companyId, **kwargs):
+    payload = {'companyId': companyId,
+               'limit': limit,
+               'offset': offset}
+    logger.debug(f'About to get resource from {url} with params {payload}.')
+    response = client.get(url, params=payload)
+    if not response.ok:
+        raise Exception(
+            f'Failed to get {url}. '
+            f'offset:{offset} limit:{limit} companyId:{companyId}\n'
+            f'{response.status_code}:{response.reason}. {response.text}')
+    try:
+        resp_json = response.json()
+    except Exception:
+        raise Exception(f'Failed to json() response from {url}. '
+                        '{response.text}')
+    logger.debug(f'Got resource {resp_json}.')
+    return resp_json
 
-    oa_log = logging.getLogger('requests_oauthlib')
-    coloredlogs.install(level='DEBUG', logger=oa_log)
+
+def get_resources(client, url, collection_name, limit, **kwargs):
+    offset = 0
+    res_list = []
+    while True:
+        try:
+            resource = get_resource_range(
+                client, url=url, offset=offset, limit=limit, **kwargs)
+        except Exception as e:
+            logger.error(f'{str(e)}')
+            break
+        if isinstance(resource, dict):
+            try:
+                collection = resource[collection_name]
+            except Exception:
+                logger.warning(
+                    f'No "{collection_name}" in {resource} for {url}. '
+                    'Returning as is.')
+                res_list.append(resource)
+                break
+            # Keyd dicts may be paginated by offset if row count is provided.
+            # Keep expanding until the result is empty.
+            if isinstance(collection, list):
+                if collection:
+                    res_list.extend(collection)
+                if ('rowCount' not in resource and
+                        'totalRowCount' not in resource and
+                        'totalRowsCount' not in resource) or not collection:
+                    break
+            else:
+                res_list.append(collection)
+                break
+        elif isinstance(resource, list):
+            res_list.extend(resource)
+            break
+        offset += limit
+    return res_list
+
+
+def get_collection(client, endp_spec, **kwargs):
+    path_spec = endp_spec[0]
+    collection_name = endp_spec[1]
+
+    if '{' in path_spec:
+        logger.warning(
+            f'Collection specified in {endp_spec} is parameterized. '
+            'Skipping.')
+        return []
+
+    url = ERECRUITER_API_URL + path_spec
+    return get_resources(
+        client, url=url, collection_name=collection_name, **kwargs)
+
+
+# Some collection extensions return different data types
+# Most important is that even if the return value is a dict
+# with a key 'target_collection_name',
+# the list under this key may not support pagination.
+def get_collection_extensions(client, collection, ext_spec, **kwargs):
+    path_spec = ext_spec[0]
+    collection_key = ext_spec[2]
+    target_collection_name = ext_spec[3]
+
+    if '{' not in path_spec:
+        logger.warning(
+            f'Collection extension {ext_spec} is not parameterized. '
+            'Skipping.')
+        return []
+    for col_item in collection:
+        collection_item_id = str(col_item[collection_key])
+        path_with_id = path_spec.replace('{id}', collection_item_id)
+        url = ERECRUITER_API_URL + path_with_id
+        try:
+            resource = get_resources(
+                client,
+                url=url,
+                collection_name=target_collection_name,
+                **kwargs)
+        except Exception as e:
+            logger.warning(
+                f'Skipping target_collection {target_collection_name}. '
+                f'{str(e)}')
+            continue
+        col_item[target_collection_name] = resource
+
+
+# extract applications from 'recruitments' collection
+# Add applications as top level resource
+# extend applications by its own prefixes
+def process_applications(client, db, **kwargs):
+    db['applications'] = []
+    if 'recruitments' not in db:
+        logger.warning(f'No recruitments in DB. Cannot process applications.')
+        return db
+    for rec in db['recruitments']:
+        if 'applications' not in rec:
+            logger.warning(
+                f'Cannot process recruitment {rec} for applications.')
+            continue
+        for app in rec['applications']:
+            app['recruitmentId'] = rec['id']
+        db['applications'].extend(rec['applications'])
+        rec.pop('applications')
+        for apps_ext_spec in apps_endpoints:
+            get_collection_extensions(client,
+                                      collection=db['applications'],
+                                      ext_spec=apps_ext_spec,
+                                      **kwargs)
+    return db
 
 
 def main():
@@ -333,15 +351,28 @@ def main():
         _http_debug_on()
     if config.get('debug', True):
         coloredlogs.install(level='DEBUG', logger=logger)
-    client = _create_client(config)
+    client = create_client(config)
     if 'companyId' not in config:
-        logger.error(f'Missing "companyId" in the config file. Please provide one.')
+        logger.error(
+            f'Missing "companyId" in the config file. Please provide one.')
         companies = client.get(ERECRUITER_API_URL + 'Account/Companies')
-        logger.info(f'Client connected. Available companies: {companies.json()}. Add the one you want in the config file.')
+        logger.info(
+            f'Client connected. '
+            f'Available companies: {companies.json()}. '
+            f'Add the one you want in the config file.')
         exit(1)
 
-    db = dump_all(client, config, endpoints)
-    _process_applications(client, config, db)
+    db = {}
+    for endp_spec in top_level_collection_endpoints:
+        collection_name = endp_spec[1]
+        collection_list = get_collection(client, endp_spec, **config)
+        db[collection_name] = collection_list
+    for ext_spec in collection_extension_endpoints:
+        collection_name = ext_spec[1]
+        get_collection_extensions(
+            client, db[collection_name], ext_spec, **config)
+
+    process_applications(client, db, **config)
     _hash_db(db, hash_keys)
     pprint.pprint(db)
 
