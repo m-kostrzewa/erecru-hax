@@ -42,7 +42,7 @@ Create a file `config.json` in `creds/` subdirectory:
 
 ### companyId
 
-If specified credentials for eRecruiter are correct but no `companyId` is specified, the client will connect
+If specified credentials for eRecruiter are correct but `companyId` is missing or invalid, the client will connect
 and print out all available companies for current user.
 Place desired `companyId` in the config file.
 

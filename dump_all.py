@@ -381,14 +381,19 @@ def main():
     if config.get('debug', True):
         coloredlogs.install(level='DEBUG', logger=logger)
     client = create_client(config)
-    if 'companyId' not in config:
+    companies = client.get(ERECRUITER_API_URL + 'Account/Companies').json()
+    companyId = config.get('companyId', 0)
+    companyFound = False
+    for comp in companies:
+        if companyId == int(comp['companyId']):
+            companyFound = True
+            break
+    if companyFound:
+        logger.info(f'Using company {comp["companyName"]}, id: {companyId}.')
+    else:
         logger.error(
-            f'Missing "companyId" in the config file. Please provide one.')
-        companies = client.get(ERECRUITER_API_URL + 'Account/Companies')
-        logger.info(
-            f'Client connected. '
-            f'Available companies: {companies.json()}. '
-            f'Add the one you want in the config file.')
+            f'Missing or invalid "companyId". Please provide one in config file. '
+            f'Available companies: {companies}. ')
         exit(1)
 
     db = {}
