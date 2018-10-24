@@ -73,6 +73,11 @@ hash_keys = [
 ]
 ```
 
+# How to analyze the dump
+
+This is just a simple dump. To associate candidate entries from Codility and eRecruiter, you can use the `email` field.
+They are the same for the same candidates in both Codility and eRecruiter dicts.
+
 # Known issues
 
 eRecruiter likes to 500 sometimes, but it's ok:
