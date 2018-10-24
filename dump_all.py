@@ -6,6 +6,7 @@ import json
 import logging
 import pickle
 import pprint
+import requests
 
 
 from oauthlib.oauth2 import LegacyApplicationClient
@@ -22,6 +23,7 @@ CONFIG_FILE = 'creds/config.json'
 TOKEN_FILE_PATH = 'creds/token.pickle'
 DEFAULT_HASH_TYPE = 'sha1'
 ERECRUITER_API_URL = 'https://api.erecruiter.pl/v1.1/'
+CODILITY_API_URL = 'http://codility.com/api/'
 # ERECRUITER_API_URL='https://testapi.io/api/m-kostrzewa/v1.1/'
 
 
@@ -97,6 +99,8 @@ hash_keys = [
     'email',
     'candidateLastName',
     'candidateEmail',
+
+    'last_name'
 ]
 
 
@@ -344,6 +348,31 @@ def process_applications(client, db, **kwargs):
                                       **kwargs)
     return db
 
+def get_codility_info(codility_token, **kwargs):
+    db= {}
+
+    codility_headers = {}
+    codility_headers['Authorization'] = f'Bearer {codility_token}'
+    codility_headers['Content-Type'] = 'application/json'
+
+    tests = requests.get(CODILITY_API_URL + 'tests', headers=codility_headers)
+    if tests.status_code == 401:
+        logger.error('Codility authorization failed. '
+                     f'Headers: {codility_headers}. '
+                     f'{tests.json()}')
+        return db
+    # We should be fine here
+    db['tests'] = []
+    for test in tests.json()['results']:
+        result = requests.get(test['url'], headers=codility_headers)
+        db['tests'].append(result.json())
+
+    sessions = requests.get(CODILITY_API_URL + 'sessions', headers=codility_headers)
+    db['sessions'] = []
+    for session in sessions.json()['results']:
+        result = requests.get(session['url'], headers=codility_headers)
+        db['sessions'].append(result.json())
+    return db
 
 def main():
     config = _get_config()
@@ -373,6 +402,8 @@ def main():
             client, db[collection_name], ext_spec, **config)
 
     process_applications(client, db, **config)
+    cod_db = get_codility_info(**config)
+    db['codility'] = cod_db
     _hash_db(db, hash_keys)
     pprint.pprint(db)
 

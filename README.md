@@ -18,21 +18,23 @@ Create a file `config.json` in `creds/` subdirectory:
   "username": "username",
   "password": "password",
   "companyId": 123456789,
+  "codility_token": "token",
   "http_debug": true,
   "debug": true,
   "limit": 100
 }
 ```
-* `"client_id"`: (Required) client id
-* `"client_secret"`: (Required) client secret
-* `"username"`: (Required) account user name
-* `"password"`: (Required) account password
-* `"companyId"`: (Required) company id
+* `"client_id"`: (Required) eRecruiter client id
+* `"client_secret"`: (Required) eRecruiter client secret
+* `"username"`: (Required) eRecruiter account user name
+* `"password"`: (Required) eRecruiter account password
+* `"companyId"`: (Required) eRecruiter company id
+* `"codility_token"`: (Optional) Codility Authorization token
 * `"http_debug"`: (Optional) enable http debug (default: False)
 * `"debug"`: (Optional) enable application level debug (default: True)
-* `"limit"`: (Optional) limit filter for API calls (default: 100)
+* `"limit"`: (Optional) limit filter for eRecruiter API calls (default: 100)
 
-If specified credentials are correct but no `companyId` is specified, the client will connect
+If specified credentials for eRecruiter are correct but no `companyId` is specified, the client will connect
 and print out all available companies for current user.
 Place desired `companyId` in the config file.
 # Usage

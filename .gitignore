@@ -1,6 +1,7 @@
 venv/
 creds/
 *.swp
+__pycache__
 
 # Bartosz's internal file
 erecruiter_api.py
