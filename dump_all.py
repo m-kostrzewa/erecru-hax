@@ -99,7 +99,7 @@ hash_keys = [
     'email',
     'candidateLastName',
     'candidateEmail',
-
+    'createUserFullName',
     'last_name'
 ]
 

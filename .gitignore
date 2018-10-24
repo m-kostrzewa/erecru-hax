@@ -2,6 +2,7 @@ venv/
 creds/
 *.swp
 __pycache__
+.vscode/
 
-# Bartosz's internal file
-erecruiter_api.py
+dump.txt
+dump.json

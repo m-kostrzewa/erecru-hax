@@ -29,16 +29,55 @@ Create a file `config.json` in `creds/` subdirectory:
 * `"username"`: (Required) eRecruiter account user name
 * `"password"`: (Required) eRecruiter account password
 * `"companyId"`: (Required) eRecruiter company id
-* `"codility_token"`: (Optional) Codility Authorization token
+* `"codility_token"`: (Optional) Codility Authorization token (without the `Authorization: Bearer` part)
 * `"http_debug"`: (Optional) enable http debug (default: False)
 * `"debug"`: (Optional) enable application level debug (default: True)
 * `"limit"`: (Optional) limit filter for eRecruiter API calls (default: 100)
 
+### Where to get keys from
+
+* eRecruiter API keys can be found under https://system.erecruiter.pl/Settings/Integration,
+* Codility API key can be found under https://app.codility.com/accounts/integrations/.
+  You may need to create an application (`Create an integration` panel on the right).
+
+### companyId
+
 If specified credentials for eRecruiter are correct but no `companyId` is specified, the client will connect
 and print out all available companies for current user.
 Place desired `companyId` in the config file.
+
 # Usage
 
 ```
 python3.6 dump_all.py
+```
+
+Dump to file:
+
+```
+python3.6 dump_all.py > dump.json
+```
+
+# Hiding personal information
+
+The script has the ability to hide personal information (by hashing).
+
+To hash any value, add it to `hash_keys` list in `dump_all.py` script, like so:
+
+```
+hash_keys = [
+    'lastName',
+    'email',
+    ...
+    'myOwnCustomField'
+]
+```
+
+# Known issues
+
+eRecruiter likes to 500 sometimes, but it's ok:
+
+```
+ERROR Failed to get https://api.erecruiter.pl/v1.1/candidates/XXXX/DesiredSalary. offset:0 limit:100 companyId:YYYY
+500:Internal Server Error. [{"message":"Internal server error ocured. Please contact with us to resolve problem.","errorCode":"InternalServerError","modelType":null}]
 ```
