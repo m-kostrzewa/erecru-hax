@@ -7,11 +7,22 @@ import logging
 import pickle
 import pprint
 import requests
+import time
 
 
+from functools import wraps
 from oauthlib.oauth2 import LegacyApplicationClient
+from ratelimit import limits, sleep_and_retry
 from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth2Session
+
+
+# Configuration of ratelimitter
+# CALLS_RATE_LIMIT=1
+# PERIOD_IN_SECONDS_RATE_LIMIT=0.5
+# means 1 request in 0.5 second, therefore 120 requests in 1 minute
+CALLS_RATE_LIMIT=1
+PERIOD_IN_SECONDS_RATE_LIMIT=0.5
 
 
 logger = logging.getLogger(__name__)
@@ -219,12 +230,30 @@ def create_client(config):
     return client
 
 
+def log_time(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        logger.debug(f"{func.__name__}({args}, {kwargs}) ran in {round(end - start, 4)}s")
+        return result
+    return wrapper
+
+
+@sleep_and_retry
+@limits(calls=CALLS_RATE_LIMIT, period=PERIOD_IN_SECONDS_RATE_LIMIT)
+@log_time
+def rate_limitted_erecruiter_request(client, url, params):
+    return client.get(url, params=params)
+
+
 def get_resource_range(client, url, offset, limit, companyId, **kwargs):
     payload = {'companyId': companyId,
                'limit': limit,
                'offset': offset}
     logger.debug(f'About to get resource from {url} with params {payload}.')
-    response = client.get(url, params=payload)
+    response = rate_limitted_erecruiter_request(client, url, payload)
     if not response.ok:
         raise Exception(
             f'Failed to get {url}. '
@@ -348,6 +377,13 @@ def process_applications(client, db, **kwargs):
                                       **kwargs)
     return db
 
+@sleep_and_retry
+@limits(calls=CALLS_RATE_LIMIT, period=PERIOD_IN_SECONDS_RATE_LIMIT)
+@log_time
+def rate_limitted_request(url, headers):
+    return requests.get(url, headers=headers)
+
+
 def get_codility_info(codility_token, **kwargs):
     db= {}
 
@@ -364,13 +400,13 @@ def get_codility_info(codility_token, **kwargs):
     # We should be fine here
     db['tests'] = []
     for test in tests.json()['results']:
-        result = requests.get(test['url'], headers=codility_headers)
+        result = rate_limitted_request(test['url'], headers=codility_headers)
         db['tests'].append(result.json())
 
     sessions = requests.get(CODILITY_API_URL + 'sessions', headers=codility_headers)
     db['sessions'] = []
     for session in sessions.json()['results']:
-        result = requests.get(session['url'], headers=codility_headers)
+        result = rate_limitted_request(session['url'], headers=codility_headers)
         db['sessions'].append(result.json())
     return db
 
