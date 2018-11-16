@@ -12,6 +12,7 @@ import time
 
 from functools import wraps
 from oauthlib.oauth2 import LegacyApplicationClient
+from pathlib import Path
 from ratelimit import limits, sleep_and_retry
 from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth2Session
@@ -21,8 +22,11 @@ from requests_oauthlib import OAuth2Session
 # CALLS_RATE_LIMIT=1
 # PERIOD_IN_SECONDS_RATE_LIMIT=0.5
 # means 1 request in 0.5 second, therefore 120 requests in 1 minute
-CALLS_RATE_LIMIT=1
-PERIOD_IN_SECONDS_RATE_LIMIT=0.5
+ERECRUITER_CALLS_RATE_LIMIT=1
+ERECRUITER_PERIOD_RATE_LIMIT=0.1
+
+CODILITY_CALLS_RATE_LIMIT=1
+CODILITY_PERIOD_RATE_LIMIT=10
 
 
 logger = logging.getLogger(__name__)
@@ -80,10 +84,10 @@ collection_extension_endpoints = [
         'candidates', 'candidateId', 'employmentexperiences'),
     ('candidates/{id}/EmploymentHistories',
         'candidates', 'candidateId', 'employmenthistories'),
-    ('candidates/{id}/Notes',
-        'candidates', 'candidateId', 'notes'),
-    ('candidates/{id}/DesiredSalary',
-        'candidates', 'candidateId', 'desiredsalary'),
+#    ('candidates/{id}/Notes',
+#        'candidates', 'candidateId', 'notes'),
+#    ('candidates/{id}/DesiredSalary',
+#        'candidates', 'candidateId', 'desiredsalary'),
     ('candidates/{id}/JobWanted',
         'candidates', 'candidateId', 'jobwanted'),
 
@@ -100,17 +104,25 @@ apps_endpoints = [
         'applications', 'applicationId', 'candidateApplicationStages'),
     ('candidateapplications/{id}/tags',
         'applications', 'applicationId', 'tags'),
-    ('candidateapplications/{id}/notes',
-        'applications', 'applicationId', 'notes'),
+#    ('candidateapplications/{id}/notes',
+#        'applications', 'applicationId', 'notes'),
 ]
 
 
 hash_keys = [
+    'firstName',
     'lastName',
     'email',
+    'candidateName',
     'candidateLastName',
     'candidateEmail',
+    'candidatePhone',
+    'candidatePhoneNumber',
     'createUserFullName',
+    'createUserLastName',
+    'candidateCvFiles',
+
+    'first_name',
     'last_name'
 ]
 
@@ -134,10 +146,12 @@ def _hash_value(value, algorithm=DEFAULT_HASH_TYPE):
     return hashobj.hexdigest()
 
 
-def _hash_db(db, keys):
+def hash_db(db, keys):
     def _walk(thing):
         if isinstance(thing, dict):
             for key in thing:
+                if not thing[key]:
+                    continue
                 if key in keys:
                     logger.debug(f'Hashing key "{key}"')
                     thing[key] = _hash_value(str(thing[key]).lower())
@@ -147,32 +161,34 @@ def _hash_db(db, keys):
             for i in thing:
                 _walk(i)
     _walk(db)
+    return db
 
 
-def _get_config():
+def get_config(filename=CONFIG_FILE):
     config = None
     try:
-        logger.debug(f'About to open config file {CONFIG_FILE}.')
-        with open(CONFIG_FILE, 'r') as f:
+        logger.debug(f'About to open config file {filename}.')
+        with open(filename, 'r') as f:
             config = json.load(f)
     except Exception as e:
-        logger.error(f'Failed to load config {CONFIG_FILE}. {str(e)}')
+        logger.error(f'Failed to load config {filename}. {str(e)}')
         exit(1)
     if 'limit' not in config:
-        logger.warning(f'Limit not specified in config file {CONFIG_FILE}. '
+        logger.warning(f'Limit not specified in config file {filename}. '
                        'Using default 100.')
         config['limit'] = 100
     logger.debug(f'Using configuration:\n{config}')
     return config
 
 
-def _token_updater(token):
+def _oauth2_token_updater(token):
     with open(TOKEN_FILE_PATH, 'wb') as handle:
         logger.debug(f'Updating token {token}.')
         pickle.dump(token, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def _get_token(config):
+def _get_oauth2_token(token_url, client_id, client_secret, username, password,
+                      **kwargs):
     token = None
     # Uncomment this if you want to use a stored token
     # try:
@@ -184,15 +200,15 @@ def _get_token(config):
 
     if token is None:
         try:
-            logger.info(f'Getting token from {ACCESS_TOKEN_URL}.')
-            auth = HTTPBasicAuth(config['client_id'], config['client_secret'])
-            client = LegacyApplicationClient(client_id=config['client_id'])
+            logger.info(f'Getting token from {token_url}.')
+            auth = HTTPBasicAuth(client_id, client_secret)
+            client = LegacyApplicationClient(client_id)
             oauth = OAuth2Session(client=client)
-            token = oauth.fetch_token(token_url=ACCESS_TOKEN_URL,
+            token = oauth.fetch_token(token_url=token_url,
                                       auth=auth,
-                                      username=config['username'],
-                                      password=config['password'])
-            _token_updater(token)
+                                      username=username,
+                                      password=password)
+            _oauth2_token_updater(token)
 
         except Exception as e:
             logger.error(f'Failed to get token. Reason: {e}')
@@ -201,7 +217,7 @@ def _get_token(config):
     return token
 
 
-def _http_debug_on():
+def http_debug_on():
     http.client.HTTPConnection.debuglevel = 1
     req_log = logging.getLogger('requests')
     req_log.propagate = True
@@ -211,20 +227,21 @@ def _http_debug_on():
     coloredlogs.install(level='DEBUG', logger=oa_log)
 
 
-def create_client(config):
-    token = _get_token(config)
+def create_client(client_id, client_secret, token_url, **kwargs):
+    token = _get_oauth2_token(token_url=token_url, client_id=client_id,
+                              client_secret=client_secret,**kwargs)
 
     extra = {
-        'client_id': config['client_id'],
-        'client_secret': config['client_secret'],
+        'client_id': client_id,
+        'client_secret': client_secret,
     }
 
     client = OAuth2Session(
-        client_id=config['client_id'],
+        client_id=client_id,
         token=token,
-        auto_refresh_url=ACCESS_TOKEN_URL,
+        auto_refresh_url=token_url,
         auto_refresh_kwargs=extra,
-        token_updater=_token_updater
+        token_updater=_oauth2_token_updater
     )
 
     return client
@@ -242,9 +259,9 @@ def log_time(func):
 
 
 @sleep_and_retry
-@limits(calls=CALLS_RATE_LIMIT, period=PERIOD_IN_SECONDS_RATE_LIMIT)
+@limits(calls=ERECRUITER_CALLS_RATE_LIMIT, period=ERECRUITER_PERIOD_RATE_LIMIT)
 @log_time
-def rate_limitted_erecruiter_request(client, url, params):
+def erecruiter_limitted_request(client, url, params):
     return client.get(url, params=params)
 
 
@@ -253,7 +270,7 @@ def get_resource_range(client, url, offset, limit, companyId, **kwargs):
                'limit': limit,
                'offset': offset}
     logger.debug(f'About to get resource from {url} with params {payload}.')
-    response = rate_limitted_erecruiter_request(client, url, payload)
+    response = erecruiter_limitted_request(client, url, payload)
     if not response.ok:
         raise Exception(
             f'Failed to get {url}. '
@@ -356,7 +373,7 @@ def get_collection_extensions(client, collection, ext_spec, **kwargs):
 # extract applications from 'recruitments' collection
 # Add applications as top level resource
 # extend applications by its own prefixes
-def process_applications(client, db, **kwargs):
+def process_applications(client, db, apps_endpoints, **kwargs):
     db['applications'] = []
     if 'recruitments' not in db:
         logger.warning(f'No recruitments in DB. Cannot process applications.')
@@ -378,9 +395,9 @@ def process_applications(client, db, **kwargs):
     return db
 
 @sleep_and_retry
-@limits(calls=CALLS_RATE_LIMIT, period=PERIOD_IN_SECONDS_RATE_LIMIT)
+@limits(calls=CODILITY_CALLS_RATE_LIMIT, period=CODILITY_PERIOD_RATE_LIMIT)
 @log_time
-def rate_limitted_request(url, headers):
+def codility_limitted_request(url, headers):
     return requests.get(url, headers=headers)
 
 
@@ -391,32 +408,47 @@ def get_codility_info(codility_token, **kwargs):
     codility_headers['Authorization'] = f'Bearer {codility_token}'
     codility_headers['Content-Type'] = 'application/json'
 
-    tests = requests.get(CODILITY_API_URL + 'tests', headers=codility_headers)
+    tests = codility_limitted_request(
+        CODILITY_API_URL + 'tests', headers=codility_headers)
     if tests.status_code == 401:
         logger.error('Codility authorization failed. '
                      f'Headers: {codility_headers}. '
                      f'{tests.json()}')
         return db
+    logger.debug(f'Got tests from Codility :{tests.json()}')
     # We should be fine here
     db['tests'] = []
     for test in tests.json()['results']:
-        result = rate_limitted_request(test['url'], headers=codility_headers)
+        result = codility_limitted_request(
+            test['url'], headers=codility_headers)
         db['tests'].append(result.json())
 
-    sessions = requests.get(CODILITY_API_URL + 'sessions', headers=codility_headers)
+    sessions = codility_limitted_request(
+        CODILITY_API_URL + 'sessions', headers=codility_headers)
+    logger.debug(f'Got sessions from Codility :{sessions.json()}')
     db['sessions'] = []
     for session in sessions.json()['results']:
-        result = rate_limitted_request(session['url'], headers=codility_headers)
+        result = codility_limitted_request(
+            session['url'], headers=codility_headers)
         db['sessions'].append(result.json())
     return db
 
+def dump_db_json(db, name='db_dump', path='./db_dump.d'):
+    p = Path(path)
+    p.mkdir(parents=True, exist_ok=True)
+    filename = p.joinpath(f'{name}_{str(int(time()*1000000))}.json')
+    logger.info(f'Dumping db to "{filename}.')
+    with open(filename, 'w') as f:
+        json.dump(f, db)
+
+
 def main():
-    config = _get_config()
+    config = get_config()
     if config.get('http_debug', False):
-        _http_debug_on()
+        http_debug_on()
     if config.get('debug', True):
         coloredlogs.install(level='DEBUG', logger=logger)
-    client = create_client(config)
+    client = create_client(**config)
     companies = client.get(ERECRUITER_API_URL + 'Account/Companies').json()
     companyId = config.get('companyId', 0)
     companyFound = False
@@ -437,16 +469,21 @@ def main():
         collection_name = endp_spec[1]
         collection_list = get_collection(client, endp_spec, **config)
         db[collection_name] = collection_list
+        dump_db_json(db, name='db_snapshot')
     for ext_spec in collection_extension_endpoints:
         collection_name = ext_spec[1]
         get_collection_extensions(
             client, db[collection_name], ext_spec, **config)
+        dump_db_json(db, name='db_snapshot')
 
-    process_applications(client, db, **config)
+    process_applications(client, db, apps_endpoints, **config)
+    dump_db_json(db, name='erecru_db')
     cod_db = get_codility_info(**config)
+    dump_db_json(db, name='codility_db')
     db['codility'] = cod_db
-    _hash_db(db, hash_keys)
+    hash_db(db, hash_keys)
     pprint.pprint(db)
+    dump_db_json(db, name='all_db')
 
 
 if __name__ == '__main__':
