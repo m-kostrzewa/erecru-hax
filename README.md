@@ -49,20 +49,18 @@ Place desired `companyId` in the config file.
 # Usage
 
 ```
-python3.6 dump_all.py
+python3.6 erecru_dump.py
+python3.6 codility_dump.py
+python3.6 postprocess_db.py <json_db_file_path> [salt]
 ```
 
-Dump to file:
-
-```
-python3.6 dump_all.py > dump.json
-```
+Database dumps are saved onto db_dump.d/ direcotry
 
 # Hiding personal information
 
-The script has the ability to hide personal information (by hashing).
+The script ```postprocess_db.py``` has the ability to hide personal information (by hashing) if `salt` is provided.
 
-To hash any value, add it to `hash_keys` list in `dump_all.py` script, like so:
+To hash any value, add it to `hash_keys` list in this script, like so:
 
 ```
 hash_keys = [
